@@ -6,5 +6,19 @@
 #include "renderer/vk_renderer.h"
 
 namespace granite {
-    void init();
+    class Engine {
+        public:
+            Engine() {
+                granite::Log::Init();
+            }
+
+            void init();
+
+            inline vkRenderer& getRenderer() {
+                return renderer;
+            }
+
+        private:
+            vkRenderer renderer;
+    };
 }

@@ -25,12 +25,12 @@ engine_lib = library('Granite',
   engine_sources,
   include_directories : engine_includes,
   install : true,
-  dependencies: [vulkan_dep, glfw_dep, glm_dep, spdlog_dep]
+  dependencies: [vulkan_dep, glm_dep, spdlog_dep, glfw_dep]
 )
 
 executable('Granite Editor',
   'editor/src/editor.cpp',
   link_with : engine_lib,
   include_directories : engine_includes,
-  dependencies: [spdlog_dep]
+  dependencies: [spdlog_dep, glfw_dep]
 )

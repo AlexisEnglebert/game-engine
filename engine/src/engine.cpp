@@ -1,7 +1,5 @@
 #include "engine.h"
 
-void granite::init() {
-    granite::Log::Init();
-    vkRenderer renderer;
+void granite::Engine::init() {
     renderer.init();
 }
