@@ -1,7 +1,6 @@
-#include "engine.hpp"
+#include "engine.h"
 
 int main() {
-    Granite::init();
+    granite::init();
     return 0;
 }
-
