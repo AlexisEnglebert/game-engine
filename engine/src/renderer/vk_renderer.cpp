@@ -1,10 +1,29 @@
 #include "renderer/vk_renderer.h"
-#include <iostream>
 
 
 bool granite::vkRenderer::init() {
+
+    glfwInit();
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+    window = glfwCreateWindow(640, 480, "My Title", NULL, NULL);
+
     createInstance();
     if(!pickPhysicalDevice()) {
+        return false;
+    }
+
+    if(!createLogicalDevice()) {
+        return false;
+    }
+
+    VkResult err = glfwCreateWindowSurface(instance, window, NULL, &surface);
+    if (err) {
+        granite::Log::GetLogger()->critical("Cannot create window surface : {0}", (int)err);
+    }
+
+    if(!initSwapchain()) {
         return false;
     }
 
@@ -24,17 +43,17 @@ bool granite::vkRenderer::createInstance() {
 
     uint32_t glfwExtensionCount = 0;
 	const char** glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount); // use gltf exetensions for vulkan 
+    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
     granite::Log::GetLogger()->debug("Number of required extensions: {0}", (int)glfwExtensionCount);
-    for(int i = 0; i < glfwExtensionCount; i++)
+    for(uint32_t i = 0; i < glfwExtensionCount; i++)
         granite::Log::GetLogger()->debug(glfwExtensions[i]);
 
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledExtensionCount = glfwExtensionCount; // Need extension to handle every platforms
-	createInfo.ppEnabledExtensionNames = glfwExtensions;// Need extension to handle every platforms
+    createInfo.enabledExtensionCount = glfwExtensionCount;
+	createInfo.ppEnabledExtensionNames = glfwExtensions;
 	createInfo.enabledLayerCount = 0; // reste obscur pour l'instant
 
     VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
@@ -55,15 +74,12 @@ int rateDeviceSuitability(VkPhysicalDevice device) {
     VkPhysicalDeviceFeatures deviceFeatures;
     vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
-    // Discrete GPUs have a significant performance advantage
     if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
         score += 1000;
     }
 
-    // Maximum possible size of textures affects graphics quality
     score += deviceProperties.limits.maxImageDimension2D;
 
-    // Application can't function without geometry shaders
     if (!deviceFeatures.geometryShader) {
         return 0;
     }
@@ -115,4 +131,184 @@ bool granite::vkRenderer::pickPhysicalDevice() {
     granite::Log::GetLogger()->info("DeviceType : {0}", (int)deviceProperty.deviceType);
 
     return true;
+}
+
+bool granite::vkRenderer::createLogicalDevice() {
+    granite::Log::GetLogger()->debug("Creating Logical Device.");
+    
+    // Check for device queue family
+    QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+    queueCreateInfo.queueCount = 1;
+    
+    float queuePriority = 1.0f;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+
+    // Create logical device
+    VkPhysicalDeviceFeatures deviceFeatures{};
+    VkDeviceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pQueueCreateInfos = &queueCreateInfo;
+    createInfo.queueCreateInfoCount = 1;
+    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+
+    //TODO: validation layers
+
+    if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &logical_device) != VK_SUCCESS) {
+        granite::Log::GetLogger()->error("Failed creating Logical device :( ");
+        return false;
+    }
+
+    granite::Log::GetLogger()->debug("Finished creating Logical Device ");
+    return true;
+
+}
+
+
+granite::QueueFamilyIndices granite::vkRenderer::findQueueFamilies(VkPhysicalDevice device) {
+    granite::Log::GetLogger()->debug("Finding Queue family");
+    
+    granite::QueueFamilyIndices indices;
+    uint32_t queueFamilyCount = 0;
+    
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+    
+    int i = 0;
+    for(const auto& queueFamily : queueFamilies){
+        if(indices.isComplete()){
+            break;
+        }
+        if(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT){
+            indices.graphicsFamily = i;
+        }
+        granite::Log::GetLogger()->info("FamilyIdx has values : {0}", indices.graphicsFamily.has_value());
+        i++;
+    }
+
+    return indices;
+}
+
+
+bool granite::vkRenderer::initSwapchain() {
+     granite::Log::GetLogger()->debug("Init Vulkan Swapchain.");
+    
+     if(!isDeviceSuitable(physicalDevice)) {
+        granite::Log::GetLogger()->critical("Device doesn't support swapchains.");
+        return false;
+     }
+
+
+    return true;
+}
+
+bool granite::vkRenderer::isDeviceSuitable(VkPhysicalDevice device) {
+    granite::QueueFamilyIndices indices = findQueueFamilies(device);
+
+    bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+    bool swapChainAdequate = false;
+    if (extensionsSupported) {
+        SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+        swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+    }
+
+    return indices.isComplete() && extensionsSupported && swapChainAdequate;
+}
+
+bool granite::vkRenderer::checkDeviceExtensionSupport(VkPhysicalDevice device) {
+     uint32_t extensionCount;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+    std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+    for (const auto& extension : availableExtensions) {
+        requiredExtensions.erase(extension.extensionName);
+    }
+
+    return requiredExtensions.empty();
+}
+
+
+granite::SwapChainSupportDetails granite::vkRenderer::querySwapChainSupport(VkPhysicalDevice device)
+{
+    //Init details about our device and window for the swapchain 
+    // refresh rate, color space etc...
+    granite::SwapChainSupportDetails details;
+
+    VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+    if(res != VK_SUCCESS) {
+        throw std::runtime_error("vkGetPhysicalDeviceSurfaceCapabilitiesKHR failed.");
+    }
+
+    uint32_t formatCount;
+
+    res = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+    if(res != VK_SUCCESS) {
+        throw std::runtime_error("vkGetPhysicalDeviceSurfaceFormatsKHR failed.");
+    }
+
+    granite::Log::GetLogger()->info("FormatCount: {0}",(int)formatCount);
+    if (formatCount != 0) {
+        details.formats.resize(formatCount);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
+    }
+
+    uint32_t presentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+
+    if (presentModeCount != 0) {
+        details.presentModes.resize(presentModeCount);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
+    }
+    
+    return details;
+}
+
+VkSurfaceFormatKHR granite::vkRenderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+    for (const auto& availableFormat : availableFormats) {
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            return availableFormat;
+        }
+    }
+    return availableFormats[0];
+}
+
+VkPresentModeKHR granite::vkRenderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
+    for (const auto& availablePresentMode : availablePresentModes) {
+        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            return availablePresentMode;
+        }
+    }
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D granite::vkRenderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+        return capabilities.currentExtent;
+    } else {
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
+
+        VkExtent2D actualExtent = {
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height)
+        };
+
+        actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+        actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+        return actualExtent;
+    }
 }
