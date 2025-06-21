@@ -17,7 +17,7 @@ namespace granite {
 
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
-
+        
         bool isComplete() {
             return graphicsFamily.has_value();
         }
@@ -53,6 +53,14 @@ namespace granite {
             bool createLogicalDevice();
             bool isDeviceSuitable(VkPhysicalDevice device);
             bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+            void createSwapChain();
+            void createGraphicsPipeline();
+            void cleanup();
+            void createRenderPass();
+            void createFrameBuffer();
+
+            void createImageViews();
+
             VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
             VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
             VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
@@ -66,6 +74,15 @@ namespace granite {
             VkSurfaceKHR surface;    
             VkPhysicalDevice physicalDevice;
             VkDevice logical_device;
+            VkSwapchainKHR swapChain;
+            VkRenderPass renderPass;
+
+            
+            std::vector<VkImage> swapChainImages;
+            std::vector<VkImageView> swapChainImageViews;
+            std::vector<VkFramebuffer> swapChainFramebuffers;
+            VkFormat swapChainImageFormat;
+            VkExtent2D swapChainExtent;
 
             GLFWwindow* window;
 
