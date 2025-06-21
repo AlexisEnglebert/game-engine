@@ -17,9 +17,10 @@ namespace granite {
 
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
-        
+        std::optional<uint32_t> presentFamily;
+
         bool isComplete() {
-            return graphicsFamily.has_value();
+            return graphicsFamily.has_value() && presentFamily.has_value();
         }
     };
 
@@ -47,6 +48,8 @@ namespace granite {
                 return window;
             }
 
+            void Draw();
+
         private:
             bool createInstance();
             bool pickPhysicalDevice();
@@ -58,8 +61,11 @@ namespace granite {
             void cleanup();
             void createRenderPass();
             void createFrameBuffer();
-
+            void createCommandPool();
+            void createCommandBuffer();
             void createImageViews();
+            void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+			void createSemaphoresAndFences();
 
             VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
             VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
@@ -69,6 +75,8 @@ namespace granite {
             QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
             SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 
+            VkQueue graphicsQueue;
+            VkQueue presentQueue;
 
             VkInstance instance;
             VkSurfaceKHR surface;    
@@ -76,8 +84,13 @@ namespace granite {
             VkDevice logical_device;
             VkSwapchainKHR swapChain;
             VkRenderPass renderPass;
+            VkCommandPool commandPool;
+            VkCommandBuffer commandBuffer;
 
-            
+            VkSemaphore imageAvailableSemaphore;
+            VkSemaphore renderFinishedSemaphore;
+            VkFence inFlightFence;
+
             std::vector<VkImage> swapChainImages;
             std::vector<VkImageView> swapChainImageViews;
             std::vector<VkFramebuffer> swapChainFramebuffers;

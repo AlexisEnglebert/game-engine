@@ -9,8 +9,8 @@ int main() {
 
     granite::Log::GetLogger()->info("Application name: {0}", engine->getApplicationName());
     while (!glfwWindowShouldClose(engine->getRenderer().getWindow())){
-    
         glfwPollEvents();
+		engine->getRenderer().Draw();
     }
 
     glfwDestroyWindow(engine->getRenderer().getWindow());
