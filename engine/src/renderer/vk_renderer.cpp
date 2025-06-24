@@ -9,17 +9,18 @@ bool granite::vkRenderer::init() {
     window = glfwCreateWindow(640, 480, "My Title", NULL, NULL);
 
     createInstance();
+
+    VkResult err = glfwCreateWindowSurface(instance, window, NULL, &surface);
+    if (err) {
+        granite::Log::GetLogger()->critical("Cannot create window surface : {0}", (int)err);
+    }
+
     if(!pickPhysicalDevice()) {
         return false;
     }
 
     if(!createLogicalDevice()) {
         return false;
-    }
-
-    VkResult err = glfwCreateWindowSurface(instance, window, NULL, &surface);
-    if (err) {
-        granite::Log::GetLogger()->critical("Cannot create window surface : {0}", (int)err);
     }
 
     if(!initSwapchain()) {
@@ -56,11 +57,14 @@ bool granite::vkRenderer::createInstance() {
     for(uint32_t i = 0; i < glfwExtensionCount; i++)
         granite::Log::GetLogger()->debug(glfwExtensions[i]);
 
+    std::vector<const char*> extensions(glfwExtensions , glfwExtensions + glfwExtensionCount);
+    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledExtensionCount = glfwExtensionCount;
-	createInfo.ppEnabledExtensionNames = glfwExtensions;
+    createInfo.enabledExtensionCount = extensions.size();
+	createInfo.ppEnabledExtensionNames = extensions.data();
 	createInfo.enabledLayerCount = 0; // reste obscur pour l'instant
 
     VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
@@ -174,6 +178,10 @@ bool granite::vkRenderer::createLogicalDevice() {
 
     vkGetDeviceQueue(logical_device, indices.graphicsFamily.value(), 0, &graphicsQueue);
     vkGetDeviceQueue(logical_device, indices.presentFamily.value(), 0, &presentQueue);
+
+    granite::Log::GetLogger()->debug("Created vulkan logical device");
+
+    return true;
 }
 
 
@@ -186,19 +194,26 @@ granite::QueueFamilyIndices granite::vkRenderer::findQueueFamilies(VkPhysicalDev
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
-    
     int i = 0;
     for(const auto& queueFamily : queueFamilies){
-        if(indices.isComplete()){
+        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                indices.graphicsFamily = i;
+        }
+
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+        if (presentSupport) {
+            indices.presentFamily = i;
+        }
+
+        if (indices.isComplete()) {
             break;
         }
-        if(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT){
-            indices.graphicsFamily = i;
-        }
+
         granite::Log::GetLogger()->info("FamilyIdx has values : {0}", indices.graphicsFamily.has_value());
         i++;
     }
-
     return indices;
 }
 
@@ -310,6 +325,7 @@ granite::SwapChainSupportDetails granite::vkRenderer::querySwapChainSupport(VkPh
     }
 
     granite::Log::GetLogger()->info("FormatCount: {0}",(int)formatCount);
+
     if (formatCount != 0) {
         details.formats.resize(formatCount);
         vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
